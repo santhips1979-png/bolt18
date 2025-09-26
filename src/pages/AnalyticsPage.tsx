@@ -19,6 +19,7 @@ function AnalyticsPage() {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [patientEngagementData, setPatientEngagementData] = useState<any[]>([]);
 
   const loadAnalyticsData = () => {
     setIsLoading(true);
@@ -32,6 +33,10 @@ function AnalyticsPage() {
     const sleepLogs = JSON.parse(localStorage.getItem('mindcare_sleep_logs') || '[]');
     const therapistServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
     const availableTherapists = JSON.parse(localStorage.getItem('mindcare_therapists') || '[]');
+    
+    // Calculate real patient engagement
+    const realPatientEngagement = calculateRealPatientEngagement();
+    setPatientEngagementData(realPatientEngagement);
 
     // Calculate metrics
     const totalUsers = registeredUsers.length + 3; // +3 for demo users
@@ -81,11 +86,7 @@ function AnalyticsPage() {
     ];
 
     // Patient engagement levels
-    const engagementData = [
-      { name: 'Highly Active', value: Math.floor(patients.length * 0.35), color: '#10B981' },
-      { name: 'Moderately Active', value: Math.floor(patients.length * 0.45), color: '#3B82F6' },
-      { name: 'Low Activity', value: Math.floor(patients.length * 0.20), color: '#F59E0B' }
-    ];
+    const engagementData = realPatientEngagement;
 
     // Therapist performance
     const therapistPerformance = availableTherapists.map((therapist: any) => {
@@ -134,7 +135,7 @@ function AnalyticsPage() {
       charts: {
         monthlyTrends: last6Months,
         moduleUsage,
-        patientEngagement: engagementData,
+        patientEngagement: realPatientEngagement,
         weeklyActivity
       },
       therapists: therapistPerformance,
@@ -150,6 +151,104 @@ function AnalyticsPage() {
     setAnalyticsData(analytics);
     setLastUpdated(new Date());
     setIsLoading(false);
+  };
+  
+  const calculateRealPatientEngagement = () => {
+    // Get all registered users and filter patients
+    const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
+    const allPatients = [...registeredUsers.filter((u: any) => u.role === 'patient')];
+    
+    // Add demo patient if no real patients
+    if (allPatients.length === 0) {
+      allPatients.push({
+        id: 'demo-patient',
+        name: 'John Doe (Demo)',
+        role: 'patient'
+      });
+    }
+    
+    // Get activity data
+    const moodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
+    const cbtRecords = JSON.parse(localStorage.getItem('mindcare_cbt_records') || '[]');
+    const gratitudeEntries = JSON.parse(localStorage.getItem('mindcare_gratitude_entries') || '[]');
+    const sleepLogs = JSON.parse(localStorage.getItem('mindcare_sleep_logs') || '[]');
+    const bookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+    
+    // Calculate engagement for each patient
+    const patientEngagement = allPatients.map((patient: any) => {
+      let activityScore = 0;
+      
+      // Count activities in the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      // For demo patient, simulate activity
+      if (patient.id === 'demo-patient') {
+        activityScore = 15; // High activity for demo
+      } else {
+        // Count real activities
+        const recentMoodEntries = moodEntries.filter((entry: any) => 
+          entry.userId === patient.id && new Date(entry.date) >= thirtyDaysAgo
+        ).length;
+        
+        const recentCBT = cbtRecords.filter((record: any) => 
+          record.userId === patient.id && new Date(record.date) >= thirtyDaysAgo
+        ).length;
+        
+        const recentGratitude = gratitudeEntries.filter((entry: any) => 
+          entry.userId === patient.id && new Date(entry.date) >= thirtyDaysAgo
+        ).length;
+        
+        const recentSleep = sleepLogs.filter((log: any) => 
+          log.userId === patient.id && new Date(log.date) >= thirtyDaysAgo
+        ).length;
+        
+        const recentSessions = bookings.filter((booking: any) => 
+          booking.patientId === patient.id && 
+          booking.status === 'completed' &&
+          new Date(booking.date) >= thirtyDaysAgo
+        ).length;
+        
+        // Calculate total activity score
+        activityScore = recentMoodEntries + recentCBT + recentGratitude + recentSleep + (recentSessions * 2);
+      }
+      
+      return {
+        patientId: patient.id,
+        patientName: patient.name,
+        activityScore
+      };
+    });
+    
+    // Categorize engagement levels based on activity scores
+    let highlyActive = 0;
+    let moderatelyActive = 0;
+    let lowActivity = 0;
+    
+    patientEngagement.forEach(patient => {
+      if (patient.activityScore >= 10) {
+        highlyActive++;
+      } else if (patient.activityScore >= 5) {
+        moderatelyActive++;
+      } else {
+        lowActivity++;
+      }
+    });
+    
+    // Ensure we have at least some data to display
+    const totalPatients = Math.max(allPatients.length, 1);
+    if (highlyActive === 0 && moderatelyActive === 0 && lowActivity === 0) {
+      // Default distribution if no activity data
+      highlyActive = Math.floor(totalPatients * 0.35);
+      moderatelyActive = Math.floor(totalPatients * 0.45);
+      lowActivity = totalPatients - highlyActive - moderatelyActive;
+    }
+    
+    return [
+      { name: 'Highly Active', value: highlyActive, color: '#10B981' },
+      { name: 'Moderately Active', value: moderatelyActive, color: '#3B82F6' },
+      { name: 'Low Activity', value: lowActivity, color: '#F59E0B' }
+    ];
   };
 
   useEffect(() => {
@@ -514,7 +613,7 @@ function AnalyticsPage() {
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
-                  data={analyticsData.charts.patientEngagement}
+                  data={patientEngagementData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -522,7 +621,7 @@ function AnalyticsPage() {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {analyticsData.charts.patientEngagement.map((entry: any, index: number) => (
+                  {patientEngagementData.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>

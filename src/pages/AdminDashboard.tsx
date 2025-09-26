@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { 
   getAnalytics, updateAnalyticsFromCurrentData, trackTherapistApproval,
-  getRecentActivity, generateTimeSeriesData
+  getRecentActivity, generateTimeSeriesData, calculatePatientEngagement
 } from '../utils/analyticsManager';
 
 function AdminDashboard() {
@@ -20,11 +20,16 @@ function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [analytics, setAnalytics] = useState<any>(null);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [patientEngagementData, setPatientEngagementData] = useState<any[]>([]);
 
   useEffect(() => {
     // Load initial analytics data
     const initialAnalytics = updateAnalyticsFromCurrentData();
     setAnalytics(initialAnalytics);
+    
+    // Load patient engagement data
+    const engagementData = calculatePatientEngagement();
+    setPatientEngagementData(engagementData);
     
     // Load recent activity
     setRecentActivity(getRecentActivity());
@@ -43,6 +48,8 @@ function AdminDashboard() {
       loadPendingServices();
       const updatedAnalytics = updateAnalyticsFromCurrentData();
       setAnalytics(updatedAnalytics);
+      const updatedEngagement = calculatePatientEngagement();
+      setPatientEngagementData(updatedEngagement);
       setRecentActivity(getRecentActivity());
     }, 5000);
     
@@ -50,6 +57,8 @@ function AdminDashboard() {
     const handleAnalyticsUpdate = () => {
       const updatedAnalytics = updateAnalyticsFromCurrentData();
       setAnalytics(updatedAnalytics);
+      const updatedEngagement = calculatePatientEngagement();
+      setPatientEngagementData(updatedEngagement);
       setRecentActivity(getRecentActivity());
     };
     

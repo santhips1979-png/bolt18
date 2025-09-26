@@ -175,6 +175,106 @@ export const trackTherapistRegistration = (therapistData: any) => {
   dispatchAnalyticsUpdate();
 };
 
+export const calculatePatientEngagement = () => {
+  // Get all registered users and filter patients
+  const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
+  const patients = registeredUsers.filter((u: any) => u.role === 'patient');
+  
+  // Get activity data
+  const moodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
+  const cbtRecords = JSON.parse(localStorage.getItem('mindcare_cbt_records') || '[]');
+  const gratitudeEntries = JSON.parse(localStorage.getItem('mindcare_gratitude_entries') || '[]');
+  const sleepLogs = JSON.parse(localStorage.getItem('mindcare_sleep_logs') || '[]');
+  const bookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+  const streakData = JSON.parse(localStorage.getItem('mindcare_streak_data') || '{}');
+  
+  // Calculate engagement for each patient
+  const patientEngagement = patients.map((patient: any) => {
+    let activityScore = 0;
+    
+    // Count activities in the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    // Mood tracking activities
+    const recentMoodEntries = moodEntries.filter((entry: any) => 
+      entry.userId === patient.id && new Date(entry.date) >= thirtyDaysAgo
+    ).length;
+    
+    // Therapy module activities
+    const recentCBT = cbtRecords.filter((record: any) => 
+      record.userId === patient.id && new Date(record.date) >= thirtyDaysAgo
+    ).length;
+    
+    const recentGratitude = gratitudeEntries.filter((entry: any) => 
+      entry.userId === patient.id && new Date(entry.date) >= thirtyDaysAgo
+    ).length;
+    
+    const recentSleep = sleepLogs.filter((log: any) => 
+      log.userId === patient.id && new Date(log.date) >= thirtyDaysAgo
+    ).length;
+    
+    // Session attendance
+    const recentSessions = bookings.filter((booking: any) => 
+      booking.patientId === patient.id && 
+      booking.status === 'completed' &&
+      new Date(booking.date) >= thirtyDaysAgo
+    ).length;
+    
+    // Calculate total activity score
+    activityScore = recentMoodEntries + recentCBT + recentGratitude + recentSleep + (recentSessions * 2);
+    
+    // Add demo patient if no real patients
+    return {
+      patientId: patient.id,
+      patientName: patient.name,
+      activityScore,
+      lastActivity: patient.lastActivity || new Date().toISOString()
+    };
+  });
+  
+  // Add demo patient data if no real patients exist
+  if (patients.length === 0) {
+    patientEngagement.push({
+      patientId: 'demo-patient',
+      patientName: 'John Doe (Demo)',
+      activityScore: 15,
+      lastActivity: new Date().toISOString()
+    });
+  }
+  
+  // Categorize engagement levels
+  const totalPatients = Math.max(patientEngagement.length, 1);
+  let highlyActive = 0;
+  let moderatelyActive = 0;
+  let lowActivity = 0;
+  
+  patientEngagement.forEach(patient => {
+    if (patient.activityScore >= 10) {
+      highlyActive++;
+    } else if (patient.activityScore >= 5) {
+      moderatelyActive++;
+    } else {
+      lowActivity++;
+    }
+  });
+  
+  // If no real data, use demo percentages
+  if (patientEngagement.every(p => p.activityScore === 0)) {
+    highlyActive = Math.floor(totalPatients * 0.35);
+    moderatelyActive = Math.floor(totalPatients * 0.45);
+    lowActivity = totalPatients - highlyActive - moderatelyActive;
+  }
+  
+  return [
+    { name: 'Highly Active', value: highlyActive, color: '#10B981' },
+    { name: 'Moderately Active', value: moderatelyActive, color: '#3B82F6' },
+    { name: 'Low Activity', value: lowActivity, color: '#F59E0B' }
+  ];
+};
+
+export { calculatePatientEngagement };
+
 export const getAnalytics = (): PlatformAnalytics => {
   const saved = localStorage.getItem('mindcare_platform_analytics');
   if (saved) {
